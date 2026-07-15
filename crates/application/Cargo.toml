@@ -1,0 +1,16 @@
+[package]
+name = "second-brain-application"
+description = "Application composition boundary for Second Brain OS"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+second-brain-contracts = { path = "../contracts" }
+
+[lints]
+workspace = true
+

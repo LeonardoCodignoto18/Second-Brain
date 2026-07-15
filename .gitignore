@@ -1,0 +1,49 @@
+/.tooling/
+/target/
+/node_modules/
+**/node_modules/
+**/dist/
+**/target/
+*.log
+*.local
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+Thumbs.db
+.DS_Store
+
+**/src-tauri/gen/
+
+# Local data and credentials
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.pem
+*.pfx
+*.p12
+*.key
+*.cer
+*.crt
+
+# Packaged and native artifacts
+*.exe
+*.dll
+*.pdb
+*.msi
+*.msix
+*.appx
+*.nsi
+*.zip
+
+# Experimental evidence is retained locally, never promoted automatically
+/spikes/
+
+# Superseded local product draft; PRD v1.2 is normative
+/PRD-Second-Brain-OS.md

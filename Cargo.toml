@@ -1,0 +1,43 @@
+[workspace]
+resolver = "3"
+members = [
+  "apps/desktop/src-tauri",
+  "crates/application",
+  "crates/contracts",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.96.1"
+authors = ["Second Brain OS contributors"]
+license = "LicenseRef-Proprietary"
+repository = "https://example.invalid/second-brain-os"
+
+[workspace.dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+tauri = { version = "=2.11.5", default-features = false, features = ["wry"] }
+tauri-build = { version = "=2.6.3", features = [] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+
+[profile.dev]
+debug = 1
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = 3
+panic = "abort"
+strip = "symbols"
+
