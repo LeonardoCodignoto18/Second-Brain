@@ -37,7 +37,7 @@ jobs:
         run: scripts/check.ps1
 
   spk01-windows-x64:
-    if: github.ref == 'refs/heads/validation/spk-01-windows-x64'
+    if: github.ref == 'refs/heads/validation/spk-01-windows-x64' || github.head_ref == 'validation/spk-01-windows-x64'
     runs-on: windows-2025
     timeout-minutes: 60
     defaults:
