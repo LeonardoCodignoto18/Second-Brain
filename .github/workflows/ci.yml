@@ -68,7 +68,7 @@ jobs:
       - name: Install frozen Tauri CLI
         run: cargo install tauri-cli --version 2.11.4 --locked
       - name: Build NSIS package
-        run: cargo tauri build --bundles nsis --locked
+        run: cargo tauri build --bundles nsis
       - name: Verify binaries and native linkage
         shell: pwsh
         run: |
