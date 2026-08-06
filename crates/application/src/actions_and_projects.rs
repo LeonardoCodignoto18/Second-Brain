@@ -102,14 +102,36 @@ pub enum TaskState {
     Cancelled,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Positive estimated task duration used by planning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TaskDuration(u16);
+
+impl TaskDuration {
+    /// Creates a positive duration in minutes.
+    #[must_use]
+    pub const fn new(minutes: u16) -> Option<Self> {
+        if minutes == 0 {
+            None
+        } else {
+            Some(Self(minutes))
+        }
+    }
+
+    /// Returns the duration in minutes.
+    #[must_use]
+    pub const fn minutes(self) -> u16 {
+        self.0
+    }
+}
 /// Immutable snapshot of a task.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Task {
     id: TaskId,
     revision: u64,
     title: String,
     state: TaskState,
     project_id: Option<ProjectId>,
+    estimated_duration: Option<TaskDuration>,
 }
 
 impl Task {
@@ -137,6 +159,11 @@ impl Task {
     /// Returns the optional linked project identifier.
     pub const fn project_id(&self) -> Option<ProjectId> {
         self.project_id
+    }
+    /// Returns the optional estimated duration used by planning.
+    #[must_use]
+    pub const fn estimated_duration(&self) -> Option<TaskDuration> {
+        self.estimated_duration
     }
 }
 
@@ -251,6 +278,7 @@ impl ActionsAndProjects {
             title,
             state: TaskState::Inbox,
             project_id: None,
+            estimated_duration: None,
         };
         self.tasks.insert(id, task.clone());
         Ok(task)
@@ -316,6 +344,43 @@ impl ActionsAndProjects {
         Ok(task.clone())
     }
 
+    /// Sets or clears the estimated duration used by planning.
+    ///
+    /// # Errors
+    /// Returns [`ActionsError`] when the task is missing or the revision is obsolete.
+    pub fn set_task_duration(
+        &mut self,
+        id: TaskId,
+        expected_revision: u64,
+        duration: Option<TaskDuration>,
+    ) -> Result<Task, ActionsError> {
+        let task = self
+            .tasks
+            .get_mut(&id)
+            .ok_or(ActionsError::NotFound(Entity::Task))?;
+        if task.estimated_duration == duration {
+            return Ok(task.clone());
+        }
+        ensure_revision(task.revision, expected_revision, Entity::Task)?;
+        task.estimated_duration = duration;
+        task.revision += 1;
+        Ok(task.clone())
+    }
+
+    /// Returns tasks whose lifecycle permits consideration by planning.
+    #[must_use]
+    pub fn eligible_tasks(&self) -> Vec<Task> {
+        self.tasks
+            .values()
+            .filter(|task| {
+                matches!(
+                    task.state,
+                    TaskState::Inbox | TaskState::Planned | TaskState::Postponed
+                )
+            })
+            .cloned()
+            .collect()
+    }
     /// Applies an allowed task lifecycle transition at the expected revision.
     ///
     /// # Errors
@@ -585,6 +650,31 @@ mod tests {
         assert_eq!(unlinked.revision(), 2);
     }
 
+    #[test]
+    fn planning_duration_is_optional_revision_safe_and_idempotent() {
+        let mut owner = ActionsAndProjects::default();
+        let task = owner.create_task(task_id(), "Ship MVP").expect("task");
+        assert_eq!(task.estimated_duration(), None);
+        assert_eq!(TaskDuration::new(0), None);
+        let duration = TaskDuration::new(45).expect("duration");
+        let updated = owner
+            .set_task_duration(task_id(), 0, Some(duration))
+            .expect("duration change");
+        let replay = owner
+            .set_task_duration(task_id(), 0, Some(duration))
+            .expect("replay");
+        assert_eq!(updated, replay);
+        assert_eq!(updated.estimated_duration(), Some(duration));
+        assert_eq!(
+            owner.set_task_duration(task_id(), 0, None),
+            Err(ActionsError::RevisionConflict {
+                entity: Entity::Task,
+                expected: 0,
+                actual: 1
+            })
+        );
+        assert_eq!(owner.eligible_tasks(), vec![updated]);
+    }
     #[test]
     fn lifecycle_accepts_contract_path_and_rejects_invalid_transition() {
         let mut owner = ActionsAndProjects::default();

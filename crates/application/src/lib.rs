@@ -8,12 +8,21 @@ use std::sync::RwLock;
 use second_brain_contracts::{FOUNDATION_CONTRACT_VERSION, FoundationStatus};
 
 mod actions_and_projects;
+mod decision_engine;
+mod planning;
 mod preferences;
 mod schedule;
 
 pub use actions_and_projects::{
     ActionsAndProjects, ActionsError, Entity, Field, Project, ProjectId, ProjectState, Task,
-    TaskId, TaskState,
+    TaskDuration, TaskId, TaskState,
+};
+pub use decision_engine::{
+    DecisionEngine, DeterministicProposal, PriorityReason, ProposedPriority,
+};
+pub use planning::{
+    ApprovalKey, ApprovalSelection, ContextFingerprint, DailyPlan, DailyPlanning, DraftId,
+    DraftState, PlanDraft, PlanId, PlanningError,
 };
 pub use preferences::{ChangePreferences, MinuteOfDay, PreferenceError, Preferences};
 pub use schedule::{
