@@ -1,6 +1,6 @@
 # Testing strategy
 
-> **Status:** Candidate foundation, technically validated but not promoted as the official production foundation. Promotion remains gated by the secondary SPK-01 reproduction and SPK-05, SPK-06, and SPK-07. No product functionality is implemented, and experimental spike code must never migrate automatically into production.
+> **Status:** Official foundation, promoted on 2026-08-06 after ARR-02 closure. SPK-01 through SPK-07 and the clean Windows CI gate are approved. Functional implementation is authorized; experimental spike code remains excluded from production.
 
 | Layer | Location | Purpose | Tooling baseline |
 |---|---|---|---|
