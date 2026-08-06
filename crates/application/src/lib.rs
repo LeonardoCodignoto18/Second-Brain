@@ -9,6 +9,7 @@ use second_brain_contracts::{FOUNDATION_CONTRACT_VERSION, FoundationStatus};
 
 mod actions_and_projects;
 mod decision_engine;
+mod execution;
 mod planning;
 mod preferences;
 mod schedule;
@@ -19,6 +20,9 @@ pub use actions_and_projects::{
 };
 pub use decision_engine::{
     DecisionEngine, DeterministicProposal, PriorityReason, ProposedPriority,
+};
+pub use execution::{
+    Execution, ExecutionError, FocusSession, FocusState, NowSnapshot, ReplanReason, ReplanSignal,
 };
 pub use planning::{
     ApprovalKey, ApprovalSelection, ContextFingerprint, DailyPlan, DailyPlanning, DraftId,
