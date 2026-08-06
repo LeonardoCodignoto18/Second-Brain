@@ -39,7 +39,7 @@ jobs:
   spk01-windows-x64:
     if: github.ref == 'refs/heads/validation/spk-01-windows-x64' || github.head_ref == 'validation/spk-01-windows-x64'
     runs-on: windows-2025
-    timeout-minutes: 60
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: spikes/SPK-01-sqlcipher-windows
