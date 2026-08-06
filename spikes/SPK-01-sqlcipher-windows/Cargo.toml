@@ -24,3 +24,5 @@ serde = { version = "1.0.228", features = ["derive"] }
 tauri = { version = "2.10.2", features = [] }
 tempfile = "3.23.0"
 thiserror = "2.0.17"
+
+[workspace]
