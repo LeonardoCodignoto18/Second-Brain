@@ -1,0 +1,6 @@
+/target/
+/evidence/runtime/
+/tooling/
+*.db
+*.db-wal
+*.db-shm
