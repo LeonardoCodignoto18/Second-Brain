@@ -7,8 +7,13 @@ use std::sync::RwLock;
 
 use second_brain_contracts::{FOUNDATION_CONTRACT_VERSION, FoundationStatus};
 
+mod actions_and_projects;
 mod preferences;
 
+pub use actions_and_projects::{
+    ActionsAndProjects, ActionsError, Entity, Field, Project, ProjectId, ProjectState, Task,
+    TaskId, TaskState,
+};
 pub use preferences::{ChangePreferences, MinuteOfDay, PreferenceError, Preferences};
 
 /// Composition root state shared by native entry points.
