@@ -78,7 +78,10 @@ jobs:
           Get-FileHash $installer.FullName -Algorithm SHA256
           $unexpected = Get-ChildItem ../../target/release -File | Where-Object { $_.Name -match '(?i)(sqlcipher|sqlite3|libcrypto|libssl).*\.dll$' }
           if ($unexpected) { $unexpected | Format-Table; throw 'Unexpected SQLCipher/OpenSSL DLL found' }
-          dumpbin /dependents $exe
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $dumpbin = & $vswhere -latest -products * -find '**/dumpbin.exe' | Select-Object -First 1
+          if (-not $dumpbin) { throw 'dumpbin.exe not found in the Visual Studio installation' }
+          & $dumpbin /dependents $exe
       - name: Upload short-lived evidence
         if: always()
         uses: actions/upload-artifact@v4
