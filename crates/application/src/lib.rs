@@ -9,12 +9,18 @@ use second_brain_contracts::{FOUNDATION_CONTRACT_VERSION, FoundationStatus};
 
 mod actions_and_projects;
 mod preferences;
+mod schedule;
 
 pub use actions_and_projects::{
     ActionsAndProjects, ActionsError, Entity, Field, Project, ProjectId, ProjectState, Task,
     TaskId, TaskState,
 };
 pub use preferences::{ChangePreferences, MinuteOfDay, PreferenceError, Preferences};
+pub use schedule::{
+    AvailabilityOverride, Commitment, CommitmentChange, CommitmentId, CommitmentOccurrence,
+    ConflictDecision, DailyAvailability, LocalDate, RecurringScope, Schedule, ScheduleError,
+    TimeWindow, Weekday, WeeklyRecurrence,
+};
 
 /// Composition root state shared by native entry points.
 #[derive(Debug)]
