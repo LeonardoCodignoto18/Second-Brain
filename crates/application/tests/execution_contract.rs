@@ -114,3 +114,67 @@ fn public_contract_rejects_obsolete_or_non_current_execution() {
         Err(ExecutionError::SessionAlreadyOpen)
     );
 }
+
+#[test]
+fn public_contract_requires_and_applies_explicit_replanning() {
+    let first = approved_plan();
+    let mut execution = Execution::default();
+    let active = execution.activate(&first).expect("activate");
+    let (pending, signal) = execution
+        .postpone(id(1), active.revision())
+        .expect("postpone");
+    assert_eq!(
+        pending.replan_reason(),
+        Some(ReplanReason::PriorityPostponed)
+    );
+    assert!(signal.is_some());
+
+    let mut actions = ActionsAndProjects::default();
+    actions.create_task(id(3), "Replacement").expect("task");
+    actions
+        .set_task_duration(id(3), 0, TaskDuration::new(30))
+        .expect("duration");
+    let day = LocalDate::new(2026, 8, 6).expect("day");
+    let mut schedule = Schedule::default();
+    schedule
+        .configure_weekday_availability(
+            Weekday::Thursday,
+            Some(
+                TimeWindow::new(
+                    MinuteOfDay::new(540).expect("start"),
+                    MinuteOfDay::new(660).expect("end"),
+                )
+                .expect("window"),
+            ),
+            0,
+        )
+        .expect("availability");
+    let proposal = DecisionEngine::propose(
+        &actions.eligible_tasks(),
+        &schedule.availability(day).expect("availability"),
+    );
+    let mut planning = DailyPlanning::default();
+    let draft = planning
+        .create_draft(
+            DraftId::new(2).expect("draft"),
+            day,
+            ContextFingerprint::new(2),
+            &proposal,
+        )
+        .expect("draft");
+    let replacement = planning
+        .approve(
+            draft.id(),
+            0,
+            ContextFingerprint::new(2),
+            PlanId::new(2).expect("plan"),
+            ApprovalKey::new(2).expect("key"),
+            ApprovalSelection::All,
+        )
+        .expect("plan");
+    let replanned = execution
+        .replan(&replacement, pending.revision())
+        .expect("replan");
+    assert_eq!(replanned.current(), Some(id(3)));
+    assert_eq!(replanned.replan_reason(), None);
+}

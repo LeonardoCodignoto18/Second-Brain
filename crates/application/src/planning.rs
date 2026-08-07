@@ -257,6 +257,61 @@ impl DailyPlanning {
         key: ApprovalKey,
         selection: ApprovalSelection,
     ) -> Result<DailyPlan, PlanningError> {
+        self.approve_internal(
+            draft_id,
+            expected_revision,
+            current_fingerprint,
+            plan_id,
+            key,
+            selection,
+            None,
+        )
+    }
+
+    /// Approves a replacement for the currently active plan after an execution trigger.
+    ///
+    /// # Errors
+    /// Returns [`PlanningError`] for the same validation failures as [`Self::approve`],
+    /// or when the supplied active plan is obsolete.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "fields mirror the frozen approval command"
+    )]
+    pub fn approve_replan(
+        &mut self,
+        draft_id: DraftId,
+        expected_revision: u64,
+        current_fingerprint: ContextFingerprint,
+        plan_id: PlanId,
+        key: ApprovalKey,
+        selection: ApprovalSelection,
+        replaces: PlanId,
+    ) -> Result<DailyPlan, PlanningError> {
+        self.approve_internal(
+            draft_id,
+            expected_revision,
+            current_fingerprint,
+            plan_id,
+            key,
+            selection,
+            Some(replaces),
+        )
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "keeps approval validation atomic"
+    )]
+    fn approve_internal(
+        &mut self,
+        draft_id: DraftId,
+        expected_revision: u64,
+        current_fingerprint: ContextFingerprint,
+        plan_id: PlanId,
+        key: ApprovalKey,
+        selection: ApprovalSelection,
+        replaces: Option<PlanId>,
+    ) -> Result<DailyPlan, PlanningError> {
         if let Some((used_draft, plan)) = self.approvals.get(&key) {
             return if *used_draft == draft_id && plan.id == plan_id {
                 Ok(plan.clone())
@@ -288,8 +343,12 @@ impl DailyPlanning {
                 .collect(),
             ApprovalSelection::Partial(tasks) => validate_selection(draft, tasks)?,
         };
-        if self.active.contains_key(&draft.day) {
-            return Err(PlanningError::ActivePlanExists);
+        if let Some(active) = self.active.get(&draft.day) {
+            if replaces != Some(active.id()) {
+                return Err(PlanningError::ActivePlanExists);
+            }
+        } else if replaces.is_some() {
+            return Err(PlanningError::ActivePlanChanged);
         }
         let plan = DailyPlan {
             id: plan_id,
@@ -364,6 +423,8 @@ pub enum PlanningError {
     StaleProposal,
     /// Another active plan already exists for the day.
     ActivePlanExists,
+    /// The plan intended for replacement is no longer active.
+    ActivePlanChanged,
     /// The approval key was previously used for another decision.
     IdempotencyConflict,
     /// More than three, duplicated, ineligible, or previously removed tasks were selected.

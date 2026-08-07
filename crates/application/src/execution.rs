@@ -74,6 +74,7 @@ pub struct NowSnapshot {
     current: Option<TaskId>,
     remaining: Vec<TaskId>,
     session: Option<FocusSession>,
+    replan_reason: Option<ReplanReason>,
     revision: u64,
 }
 impl NowSnapshot {
@@ -103,6 +104,11 @@ impl NowSnapshot {
         self.session.as_ref()
     }
     #[must_use]
+    /// Returns why an explicit replanning decision is pending, when applicable.
+    pub const fn replan_reason(&self) -> Option<ReplanReason> {
+        self.replan_reason
+    }
+    #[must_use]
     /// Returns this value.
     pub const fn revision(&self) -> u64 {
         self.revision
@@ -117,6 +123,7 @@ struct ActiveExecution {
     completed: BTreeSet<TaskId>,
     postponed: BTreeSet<TaskId>,
     session: Option<FocusSession>,
+    replan_reason: Option<ReplanReason>,
     revision: u64,
 }
 
@@ -145,6 +152,7 @@ impl Execution {
             completed: BTreeSet::new(),
             postponed: BTreeSet::new(),
             session: None,
+            replan_reason: None,
             revision: 0,
         };
         let result = snapshot(&active);
@@ -214,6 +222,36 @@ impl Execution {
     ) -> Result<(NowSnapshot, Option<ReplanSignal>), ExecutionError> {
         self.finish(task, expected_revision, true)
     }
+
+    /// Replaces the remaining priorities after an explicit replanning approval.
+    /// Exact replays are idempotent.
+    /// # Errors
+    /// Returns a deterministic state, date, plan, or revision failure.
+    pub fn replan(
+        &mut self,
+        plan: &DailyPlan,
+        expected_revision: u64,
+    ) -> Result<NowSnapshot, ExecutionError> {
+        let active = self.active.as_mut().ok_or(ExecutionError::NoActivePlan)?;
+        if active.plan_id == plan.id() && active.day == plan.day() {
+            return Ok(snapshot(active));
+        }
+        ensure_revision(active.revision, expected_revision)?;
+        if active.replan_reason.is_none() {
+            return Err(ExecutionError::ReplanNotRequested);
+        }
+        if active.session.is_some() {
+            return Err(ExecutionError::SessionAlreadyOpen);
+        }
+        if active.day != plan.day() {
+            return Err(ExecutionError::ReplanDayMismatch);
+        }
+        active.plan_id = plan.id();
+        active.remaining = plan.priorities().to_vec();
+        active.replan_reason = None;
+        active.revision += 1;
+        Ok(snapshot(active))
+    }
     #[must_use]
     /// Returns the current snapshot value.
     pub fn now(&self) -> Option<NowSnapshot> {
@@ -281,6 +319,7 @@ impl Execution {
         } else {
             None
         };
+        active.replan_reason = reason;
         Ok((
             snapshot(active),
             reason.map(|reason| ReplanSignal {
@@ -304,6 +343,10 @@ pub enum ExecutionError {
     NoOpenSession,
     /// The task is not the item currently shown by Agora.
     NotCurrentPriority,
+    /// No execution trigger currently permits replanning.
+    ReplanNotRequested,
+    /// A replacement plan belongs to another operational day.
+    ReplanDayMismatch,
     /// The caller changed an obsolete snapshot.
     RevisionConflict {
         /// Revision supplied by the caller.
@@ -327,6 +370,7 @@ fn snapshot(active: &ActiveExecution) -> NowSnapshot {
         current: active.remaining.first().copied(),
         remaining: active.remaining.clone(),
         session: active.session.clone(),
+        replan_reason: active.replan_reason,
         revision: active.revision,
     }
 }

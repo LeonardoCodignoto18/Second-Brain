@@ -100,3 +100,74 @@ fn public_contract_preserves_incomplete_and_rejected_drafts() {
         Err(PlanningError::DraftNotPending)
     );
 }
+
+#[test]
+fn public_contract_replaces_only_the_expected_active_plan() {
+    let mut actions = ActionsAndProjects::default();
+    for value in 1..=2 {
+        actions
+            .create_task(task_id(value), format!("Task {value}"))
+            .expect("task");
+        actions
+            .set_task_duration(task_id(value), 0, TaskDuration::new(30))
+            .expect("duration");
+    }
+    let day = LocalDate::new(2026, 8, 6).expect("day");
+    let mut schedule = Schedule::default();
+    schedule
+        .configure_weekday_availability(
+            Weekday::Thursday,
+            Some(
+                TimeWindow::new(
+                    MinuteOfDay::new(540).expect("start"),
+                    MinuteOfDay::new(660).expect("end"),
+                )
+                .expect("window"),
+            ),
+            0,
+        )
+        .expect("availability");
+    let proposal = DecisionEngine::propose(
+        &actions.eligible_tasks(),
+        &schedule.availability(day).expect("availability"),
+    );
+    let mut planning = DailyPlanning::default();
+    let draft = planning
+        .create_draft(
+            DraftId::new(1).expect("draft"),
+            day,
+            ContextFingerprint::new(1),
+            &proposal,
+        )
+        .expect("draft");
+    let first = planning
+        .approve(
+            draft.id(),
+            0,
+            ContextFingerprint::new(1),
+            PlanId::new(1).expect("plan"),
+            ApprovalKey::new(1).expect("key"),
+            ApprovalSelection::All,
+        )
+        .expect("first plan");
+    let replacement_draft = planning
+        .create_draft(
+            DraftId::new(2).expect("draft"),
+            day,
+            ContextFingerprint::new(2),
+            &proposal,
+        )
+        .expect("draft");
+    let replacement = planning
+        .approve_replan(
+            replacement_draft.id(),
+            0,
+            ContextFingerprint::new(2),
+            PlanId::new(2).expect("plan"),
+            ApprovalKey::new(2).expect("key"),
+            ApprovalSelection::Partial(vec![task_id(2)]),
+            first.id(),
+        )
+        .expect("replacement");
+    assert_eq!(planning.active_plan(day), Some(replacement));
+}
