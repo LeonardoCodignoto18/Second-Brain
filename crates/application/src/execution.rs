@@ -252,6 +252,41 @@ impl Execution {
         active.revision += 1;
         Ok(snapshot(active))
     }
+    /// Rejects a pending replanning proposal while preserving the remaining plan.
+    /// Exact replays are idempotent.
+    /// # Errors
+    /// Returns a deterministic state or revision failure.
+    pub fn dismiss_replan(
+        &mut self,
+        expected_revision: u64,
+    ) -> Result<NowSnapshot, ExecutionError> {
+        let active = self.active.as_mut().ok_or(ExecutionError::NoActivePlan)?;
+        if active.replan_reason.is_none() {
+            return Ok(snapshot(active));
+        }
+        ensure_revision(active.revision, expected_revision)?;
+        active.replan_reason = None;
+        active.revision += 1;
+        Ok(snapshot(active))
+    }
+    /// Explicitly closes an execution from an earlier operational day.
+    /// # Errors
+    /// Returns a deterministic date or revision failure.
+    pub fn close_before(
+        &mut self,
+        next_day: LocalDate,
+        expected_revision: u64,
+    ) -> Result<(), ExecutionError> {
+        let Some(active) = self.active.as_ref() else {
+            return Ok(());
+        };
+        if active.day >= next_day {
+            return Err(ExecutionError::DayNotAdvanced);
+        }
+        ensure_revision(active.revision, expected_revision)?;
+        self.active = None;
+        Ok(())
+    }
     #[must_use]
     /// Returns the current snapshot value.
     pub fn now(&self) -> Option<NowSnapshot> {
@@ -347,6 +382,8 @@ pub enum ExecutionError {
     ReplanNotRequested,
     /// A replacement plan belongs to another operational day.
     ReplanDayMismatch,
+    /// The requested next day does not follow the active execution day.
+    DayNotAdvanced,
     /// The caller changed an obsolete snapshot.
     RevisionConflict {
         /// Revision supplied by the caller.

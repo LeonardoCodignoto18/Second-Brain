@@ -1,4 +1,4 @@
-﻿import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FoundationShell } from "./FoundationShell";
@@ -137,6 +137,72 @@ describe("integrated desktop shell", () => {
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("start_focus", {
         request: { expectedRevision: 0 },
+      }),
+    );
+  });
+  it("keeps incomplete proposals non-mutating and allows explicit rejection", async () => {
+    const incomplete = {
+      ...base,
+      tasks: [{ ...task, estimatedMinutes: null }],
+      dailyCycle: {
+        availability: {
+          day: "2026-08-07",
+          startMinute: 540,
+          endMinute: 1080,
+          revision: 1,
+        },
+        draft: {
+          id: 7,
+          revision: 0,
+          priorityTaskIds: [],
+          eligibleTaskIds: [],
+          missingDurationTaskIds: [1],
+          contextComplete: true,
+          replanning: false,
+        },
+        now: null,
+      },
+    };
+    invoke.mockResolvedValueOnce(incomplete).mockResolvedValueOnce(base);
+
+    render(<FoundationShell />);
+    expect(await screen.findByText(/ficaram fora/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Selecione uma prioridade" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Aceitar sugestão" }),
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Agora não" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("reject_daily_plan", {
+        request: { draftId: 7, expectedRevision: 0 },
+      }),
+    );
+  });
+  it("requires explicit closure when Agora belongs to an earlier day", async () => {
+    const previousDay = {
+      ...active,
+      dailyCycle: {
+        ...active.dailyCycle,
+        now: {
+          ...active.dailyCycle.now,
+          day: "2026-08-06",
+        },
+      },
+    };
+    invoke.mockResolvedValueOnce(previousDay).mockResolvedValueOnce(base);
+
+    render(<FoundationShell />);
+    const close = await screen.findByRole("button", {
+      name: "Encerrar dia anterior",
+    });
+    fireEvent.click(close);
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("start_new_day", {
+        request: { day: "2026-08-07", expectedRevision: 0 },
       }),
     );
   });

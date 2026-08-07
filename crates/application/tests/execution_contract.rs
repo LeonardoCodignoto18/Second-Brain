@@ -178,3 +178,43 @@ fn public_contract_requires_and_applies_explicit_replanning() {
     assert_eq!(replanned.current(), Some(id(3)));
     assert_eq!(replanned.replan_reason(), None);
 }
+
+#[test]
+fn public_contract_allows_replanning_rejection_without_losing_remaining_work() {
+    let plan = approved_plan();
+    let mut execution = Execution::default();
+    let active = execution.activate(&plan).expect("activate");
+    let (pending, _) = execution
+        .postpone(id(1), active.revision())
+        .expect("postpone");
+    assert_eq!(pending.current(), Some(id(2)));
+    let continued = execution
+        .dismiss_replan(pending.revision())
+        .expect("dismiss");
+    assert_eq!(continued.current(), Some(id(2)));
+    assert_eq!(continued.replan_reason(), None);
+    assert_eq!(
+        execution
+            .dismiss_replan(pending.revision())
+            .expect("idempotent replay"),
+        continued
+    );
+}
+
+#[test]
+fn public_contract_closes_only_an_earlier_operational_day_explicitly() {
+    let plan = approved_plan();
+    let mut execution = Execution::default();
+    let active = execution.activate(&plan).expect("activate");
+    assert_eq!(
+        execution.close_before(active.day(), active.revision()),
+        Err(ExecutionError::DayNotAdvanced)
+    );
+    execution
+        .close_before(
+            LocalDate::new(2026, 8, 7).expect("next day"),
+            active.revision(),
+        )
+        .expect("close");
+    assert_eq!(execution.now(), None);
+}

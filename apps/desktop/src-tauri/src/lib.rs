@@ -11,7 +11,8 @@ use second_brain_application::Application;
 use second_brain_contracts::{
     ApproveDailyPlanRequest, ArchiveProjectRequest, ConfigureDailyAvailabilityRequest,
     CreateProjectRequest, CreateTaskRequest, ExecuteNowRequest, FoundationStatus, IpcError,
-    ProposeDailyPlanRequest, TransitionTaskRequest, WorkspaceSnapshot,
+    ProposeDailyPlanRequest, RejectDailyPlanRequest, StartNewDayRequest, TransitionTaskRequest,
+    WorkspaceSnapshot,
 };
 use tauri::{Manager, State};
 
@@ -109,6 +110,37 @@ fn approve_daily_plan(
 }
 
 #[tauri::command]
+fn reject_daily_plan(
+    request: RejectDailyPlanRequest,
+    runtime: State<'_, Mutex<Runtime>>,
+) -> Result<WorkspaceSnapshot, IpcError> {
+    runtime
+        .lock()
+        .map_err(|_| unavailable())?
+        .reject_daily_plan(request)
+}
+
+#[tauri::command]
+fn dismiss_replan(
+    request: ExecuteNowRequest,
+    runtime: State<'_, Mutex<Runtime>>,
+) -> Result<WorkspaceSnapshot, IpcError> {
+    runtime
+        .lock()
+        .map_err(|_| unavailable())?
+        .dismiss_replan(request)
+}
+#[tauri::command]
+fn start_new_day(
+    request: StartNewDayRequest,
+    runtime: State<'_, Mutex<Runtime>>,
+) -> Result<WorkspaceSnapshot, IpcError> {
+    runtime
+        .lock()
+        .map_err(|_| unavailable())?
+        .start_new_day(request)
+}
+#[tauri::command]
 fn start_focus(
     request: ExecuteNowRequest,
     runtime: State<'_, Mutex<Runtime>>,
@@ -178,6 +210,9 @@ pub fn run() {
             configure_daily_availability,
             propose_daily_plan,
             approve_daily_plan,
+            reject_daily_plan,
+            dismiss_replan,
+            start_new_day,
             start_focus,
             complete_current,
             postpone_current

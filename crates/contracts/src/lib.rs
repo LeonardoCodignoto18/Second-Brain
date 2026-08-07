@@ -185,6 +185,24 @@ pub struct ApproveDailyPlanRequest {
     pub selected_task_ids: Option<Vec<u64>>,
 }
 
+/// Rejects a pending proposal without applying its priorities.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct RejectDailyPlanRequest {
+    /// Stable draft identifier.
+    pub draft_id: u64,
+    /// Expected draft revision.
+    pub expected_revision: u64,
+}
+/// Explicitly closes an earlier operational day before planning a new one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct StartNewDayRequest {
+    /// ISO local date that must be later than the active plan date.
+    pub day: String,
+    /// Expected Agora revision.
+    pub expected_revision: u64,
+}
 /// Revision-safe command for the current Agora item.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

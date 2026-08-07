@@ -140,6 +140,27 @@ function Today({
       .map((id) => data.tasks.find((task) => task.id === id))
       .filter((task): task is TaskDto => Boolean(task)) ?? [];
 
+  if (now && now.day !== day) {
+    return (
+      <section className="planning-stage">
+        <article className="now-card replan-card">
+          <p className="section-label">NOVO DIA</p>
+          <h2>O plano anterior ainda está aberto</h2>
+          <p>
+            As ações não concluídas serão adiadas conscientemente antes de você
+            planejar hoje.
+          </p>
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => void run(() => workspace.startNewDay(day, now))}
+          >
+            Encerrar dia anterior
+          </button>
+        </article>
+      </section>
+    );
+  }
   if (draft) {
     return <PlanProposal data={data} draft={draft} busy={busy} run={run} />;
   }
@@ -159,13 +180,22 @@ function Today({
               ? "A prioridade foi adiada. Vamos escolher conscientemente o próximo passo."
               : "As prioridades planejadas terminaram. Você decide se o dia continua."}
           </p>
-          <button
-            className="primary"
-            disabled={busy}
-            onClick={() => void run(() => workspace.proposePlan(now.day))}
-          >
-            Replanejar agora
-          </button>
+          <div className="actions">
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() => void run(() => workspace.proposePlan(now.day))}
+            >
+              Replanejar agora
+            </button>
+            <button
+              className="quiet"
+              disabled={busy}
+              onClick={() => void run(() => workspace.dismissReplan(now))}
+            >
+              {current ? "Continuar plano atual" : "Encerrar por agora"}
+            </button>
+          </div>
         </article>
         <AfterPanel data={data} tasks={next} />
       </section>
@@ -362,19 +392,28 @@ function PlanProposal({
         <div className="actions">
           <button
             className="primary"
-            disabled={busy}
+            disabled={busy || selected.length === 0}
             onClick={() =>
               void run(() => workspace.approvePlan(draft, selected))
             }
           >
-            {selected.length ? `Aprovar ${selected.length}` : "Encerrar plano"}
+            {selected.length
+              ? `Aprovar ${selected.length}`
+              : "Selecione uma prioridade"}
+          </button>
+          <button
+            className="quiet"
+            disabled={busy || draft.priorityTaskIds.length === 0}
+            onClick={() => void run(() => workspace.approvePlan(draft, null))}
+          >
+            Aceitar sugestão
           </button>
           <button
             className="quiet"
             disabled={busy}
-            onClick={() => void run(() => workspace.approvePlan(draft, null))}
+            onClick={() => void run(() => workspace.rejectPlan(draft))}
           >
-            Aceitar sugestão
+            {draft.replanning ? "Manter plano atual" : "Agora não"}
           </button>
         </div>
       </article>

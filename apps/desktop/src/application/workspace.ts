@@ -1,4 +1,4 @@
-﻿import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 
 export interface ProjectDto {
   id: number;
@@ -100,6 +100,18 @@ export const workspace = {
         expectedRevision: draft.revision,
         selectedTaskIds,
       },
+    }),
+  rejectPlan: (draft: PlanDraftDto) =>
+    invoke<WorkspaceSnapshot>("reject_daily_plan", {
+      request: { draftId: draft.id, expectedRevision: draft.revision },
+    }),
+  dismissReplan: (now: NowDto) =>
+    invoke<WorkspaceSnapshot>("dismiss_replan", {
+      request: { expectedRevision: now.revision },
+    }),
+  startNewDay: (day: string, now: NowDto) =>
+    invoke<WorkspaceSnapshot>("start_new_day", {
+      request: { day, expectedRevision: now.revision },
     }),
   startFocus: (now: NowDto) =>
     invoke<WorkspaceSnapshot>("start_focus", {

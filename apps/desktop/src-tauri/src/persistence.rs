@@ -145,6 +145,13 @@ impl LocalStore {
         Ok(sequence)
     }
 
+    #[cfg(test)]
+    pub(crate) fn reject_appends_for_test(&self) -> Result<(), StoreError> {
+        self.connection.execute_batch(
+            "CREATE TEMP TRIGGER reject_operation_append BEFORE INSERT ON operations BEGIN SELECT RAISE(FAIL, 'injected append failure'); END;",
+        )?;
+        Ok(())
+    }
     /// Loads the ordered journal for deterministic state reconstruction.
     ///
     /// # Errors

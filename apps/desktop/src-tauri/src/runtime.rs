@@ -11,7 +11,8 @@ use second_brain_contracts::{
     ApproveDailyPlanRequest, ArchiveProjectRequest, ConfigureDailyAvailabilityRequest,
     CreateProjectRequest, CreateTaskRequest, DailyAvailabilityDto, DailyCycleDto,
     ExecuteNowRequest, IpcError, NowDto, PlanDraftDto, ProjectDto, ProposeDailyPlanRequest,
-    StorageHealthDto, TaskDto, TransitionTaskRequest, WorkspaceSnapshot,
+    RejectDailyPlanRequest, StartNewDayRequest, StorageHealthDto, TaskDto, TransitionTaskRequest,
+    WorkspaceSnapshot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -59,6 +60,17 @@ enum Operation {
         approval_key: u64,
         selected_task_ids: Option<Vec<u64>>,
         replaces_plan_id: Option<u64>,
+    },
+    RejectDailyPlan {
+        draft_id: u64,
+        expected_revision: u64,
+    },
+    DismissReplan {
+        expected_revision: u64,
+    },
+    StartNewDay {
+        day: String,
+        expected_revision: u64,
     },
     StartFocus {
         expected_revision: u64,
@@ -261,6 +273,33 @@ impl Runtime {
         })
     }
 
+    pub(crate) fn reject_daily_plan(
+        &mut self,
+        request: RejectDailyPlanRequest,
+    ) -> Result<WorkspaceSnapshot, IpcError> {
+        self.apply_transaction(Operation::RejectDailyPlan {
+            draft_id: request.draft_id,
+            expected_revision: request.expected_revision,
+        })
+    }
+
+    pub(crate) fn dismiss_replan(
+        &mut self,
+        request: ExecuteNowRequest,
+    ) -> Result<WorkspaceSnapshot, IpcError> {
+        self.apply_transaction(Operation::DismissReplan {
+            expected_revision: request.expected_revision,
+        })
+    }
+    pub(crate) fn start_new_day(
+        &mut self,
+        request: StartNewDayRequest,
+    ) -> Result<WorkspaceSnapshot, IpcError> {
+        self.apply_transaction(Operation::StartNewDay {
+            day: request.day,
+            expected_revision: request.expected_revision,
+        })
+    }
     pub(crate) fn start_focus(
         &mut self,
         request: ExecuteNowRequest,
@@ -345,6 +384,9 @@ impl Runtime {
                 ..
             } => "plan.replanned",
             Operation::ApproveDailyPlan { .. } => "plan.approved",
+            Operation::RejectDailyPlan { .. } => "plan.rejected",
+            Operation::DismissReplan { .. } => "replan.dismissed",
+            Operation::StartNewDay { .. } => "day.started",
             Operation::StartFocus { .. } => "focus.started",
             Operation::CompleteCurrent { .. } => "focus.completed",
             Operation::PostponeCurrent { .. } => "focus.postponed",
@@ -550,6 +592,91 @@ fn apply(
                 cycle.execution.activate(&plan).map_err(execution_error)?;
             }
             cycle.pending = None;
+        }
+        Operation::RejectDailyPlan {
+            draft_id,
+            expected_revision,
+        } => {
+            let draft_id = draft_id_from(*draft_id)?;
+            let pending = cycle
+                .pending
+                .as_ref()
+                .filter(|pending| pending.id == draft_id)
+                .cloned()
+                .ok_or_else(|| {
+                    safe_error(
+                        "planning.draft_changed",
+                        "A proposta ja nao e a proposta atual.",
+                    )
+                })?;
+            cycle
+                .planning
+                .reject(draft_id, *expected_revision)
+                .map_err(planning_error)?;
+            if pending.replanning {
+                let revision = cycle
+                    .execution
+                    .now()
+                    .ok_or_else(|| {
+                        safe_error(
+                            "execution.not_active",
+                            "Nao existe plano ativo para continuar.",
+                        )
+                    })?
+                    .revision();
+                cycle
+                    .execution
+                    .dismiss_replan(revision)
+                    .map_err(execution_error)?;
+            }
+            cycle.pending = None;
+        }
+        Operation::DismissReplan { expected_revision } => {
+            cycle
+                .execution
+                .dismiss_replan(*expected_revision)
+                .map_err(execution_error)?;
+        }
+        Operation::StartNewDay {
+            day,
+            expected_revision,
+        } => {
+            let next_day = parse_date(day)?;
+            let now = cycle.execution.now().ok_or_else(|| {
+                safe_error(
+                    "execution.not_active",
+                    "Nao existe dia anterior para encerrar.",
+                )
+            })?;
+            let remaining = now.remaining().to_vec();
+            for id in remaining {
+                let task = actions.task(id).ok_or_else(|| {
+                    safe_error(
+                        "domain.task_missing",
+                        "Uma acao do plano anterior nao existe mais.",
+                    )
+                })?;
+                if matches!(task.state(), TaskState::Planned | TaskState::InProgress) {
+                    actions
+                        .transition_task(id, task.revision(), TaskState::Postponed)
+                        .map_err(domain_error)?;
+                }
+            }
+            if let Some(pending) = cycle.pending.take()
+                && let Some(draft) = cycle.planning.draft(pending.id)
+            {
+                cycle
+                    .planning
+                    .reject(draft.id(), draft.revision())
+                    .map_err(planning_error)?;
+            }
+            cycle
+                .execution
+                .close_before(next_day, *expected_revision)
+                .map_err(execution_error)?;
+            if cycle.availability.as_ref().map(|value| value.day) != Some(next_day) {
+                cycle.availability = None;
+            }
         }
         Operation::StartFocus { expected_revision } => {
             let current = current_task(cycle)?;
@@ -912,6 +1039,191 @@ mod tests {
             snapshot.daily_cycle.now.expect("now").current_task_id,
             Some(3)
         );
+        drop(runtime);
+        clean(&directory);
+    }
+    #[test]
+    fn incomplete_context_is_preserved_without_mutating_execution() {
+        let directory = directory("incomplete-context");
+        clean(&directory);
+        let mut runtime = Runtime::open(&directory).expect("runtime");
+        runtime
+            .create_task(CreateTaskRequest {
+                title: "Needs duration".to_owned(),
+                project_id: None,
+                estimated_minutes: None,
+            })
+            .expect("task");
+        runtime
+            .configure_daily_availability(ConfigureDailyAvailabilityRequest {
+                day: "2026-08-07".to_owned(),
+                start_minute: 540,
+                end_minute: 720,
+                expected_revision: 0,
+            })
+            .expect("availability");
+        let proposed = runtime
+            .propose_daily_plan(ProposeDailyPlanRequest {
+                day: "2026-08-07".to_owned(),
+            })
+            .expect("proposal");
+        let draft = proposed.daily_cycle.draft.expect("draft");
+        assert!(draft.eligible_task_ids.is_empty());
+        assert_eq!(draft.missing_duration_task_ids, vec![1]);
+        assert!(proposed.daily_cycle.now.is_none());
+        drop(runtime);
+        clean(&directory);
+    }
+
+    #[test]
+    fn rejected_replanning_continues_with_the_remaining_priority_after_restart() {
+        let directory = directory("reject-replan");
+        clean(&directory);
+        {
+            let mut runtime = Runtime::open(&directory).expect("runtime");
+            for title in ["First", "Second"] {
+                runtime
+                    .create_task(CreateTaskRequest {
+                        title: title.to_owned(),
+                        project_id: None,
+                        estimated_minutes: Some(30),
+                    })
+                    .expect("task");
+            }
+            runtime
+                .configure_daily_availability(ConfigureDailyAvailabilityRequest {
+                    day: "2026-08-07".to_owned(),
+                    start_minute: 540,
+                    end_minute: 720,
+                    expected_revision: 0,
+                })
+                .expect("availability");
+            let proposal = runtime
+                .propose_daily_plan(ProposeDailyPlanRequest {
+                    day: "2026-08-07".to_owned(),
+                })
+                .expect("proposal");
+            let draft = proposal.daily_cycle.draft.expect("draft");
+            let approved = runtime
+                .approve_daily_plan(ApproveDailyPlanRequest {
+                    draft_id: draft.id,
+                    expected_revision: draft.revision,
+                    selected_task_ids: Some(vec![1, 2]),
+                })
+                .expect("approve");
+            let now = approved.daily_cycle.now.expect("now");
+            runtime
+                .postpone_current(ExecuteNowRequest {
+                    expected_revision: now.revision,
+                })
+                .expect("postpone");
+            let proposal = runtime
+                .propose_daily_plan(ProposeDailyPlanRequest {
+                    day: "2026-08-07".to_owned(),
+                })
+                .expect("replan");
+            let draft = proposal.daily_cycle.draft.expect("draft");
+            let continued = runtime
+                .reject_daily_plan(RejectDailyPlanRequest {
+                    draft_id: draft.id,
+                    expected_revision: draft.revision,
+                })
+                .expect("reject");
+            let now = continued.daily_cycle.now.expect("now");
+            assert_eq!(now.current_task_id, Some(2));
+            assert_eq!(now.replan_reason, None);
+        }
+        let runtime = Runtime::open(&directory).expect("reopen");
+        let now = runtime.snapshot().daily_cycle.now.expect("now");
+        assert_eq!(now.current_task_id, Some(2));
+        assert_eq!(now.replan_reason, None);
+        drop(runtime);
+        clean(&directory);
+    }
+
+    #[test]
+    fn auxiliary_append_failure_leaves_runtime_and_journal_unchanged() {
+        let directory = directory("append-failure");
+        clean(&directory);
+        let mut runtime = Runtime::open(&directory).expect("runtime");
+        let before = runtime.snapshot();
+        runtime
+            .store
+            .reject_appends_for_test()
+            .expect("inject failure");
+        assert!(
+            runtime
+                .create_task(CreateTaskRequest {
+                    title: "Must roll back".to_owned(),
+                    project_id: None,
+                    estimated_minutes: Some(30),
+                })
+                .is_err()
+        );
+        assert_eq!(runtime.snapshot(), before);
+        drop(runtime);
+        let reopened = Runtime::open(&directory).expect("reopen");
+        assert_eq!(reopened.snapshot(), before);
+        drop(reopened);
+        clean(&directory);
+    }
+    #[test]
+    fn explicit_day_rollover_postpones_unfinished_work_and_survives_restart() {
+        let directory = directory("day-rollover");
+        clean(&directory);
+        {
+            let mut runtime = Runtime::open(&directory).expect("runtime");
+            for title in ["Active yesterday", "Planned yesterday"] {
+                runtime
+                    .create_task(CreateTaskRequest {
+                        title: title.to_owned(),
+                        project_id: None,
+                        estimated_minutes: Some(30),
+                    })
+                    .expect("task");
+            }
+            runtime
+                .configure_daily_availability(ConfigureDailyAvailabilityRequest {
+                    day: "2026-08-07".to_owned(),
+                    start_minute: 540,
+                    end_minute: 720,
+                    expected_revision: 0,
+                })
+                .expect("availability");
+            let proposal = runtime
+                .propose_daily_plan(ProposeDailyPlanRequest {
+                    day: "2026-08-07".to_owned(),
+                })
+                .expect("proposal");
+            let draft = proposal.daily_cycle.draft.expect("draft");
+            let approved = runtime
+                .approve_daily_plan(ApproveDailyPlanRequest {
+                    draft_id: draft.id,
+                    expected_revision: draft.revision,
+                    selected_task_ids: Some(vec![1, 2]),
+                })
+                .expect("approve");
+            let now = approved.daily_cycle.now.expect("now");
+            let active = runtime
+                .start_focus(ExecuteNowRequest {
+                    expected_revision: now.revision,
+                })
+                .expect("start");
+            let now = active.daily_cycle.now.expect("active");
+            let rolled = runtime
+                .start_new_day(StartNewDayRequest {
+                    day: "2026-08-08".to_owned(),
+                    expected_revision: now.revision,
+                })
+                .expect("rollover");
+            assert!(rolled.daily_cycle.now.is_none());
+            assert!(rolled.daily_cycle.availability.is_none());
+            assert!(rolled.tasks.iter().all(|task| task.state == "postponed"));
+        }
+        let runtime = Runtime::open(&directory).expect("reopen");
+        let snapshot = runtime.snapshot();
+        assert!(snapshot.daily_cycle.now.is_none());
+        assert!(snapshot.tasks.iter().all(|task| task.state == "postponed"));
         drop(runtime);
         clean(&directory);
     }
