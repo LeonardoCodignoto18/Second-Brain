@@ -131,7 +131,7 @@ impl Runtime {
             let operation: Operation = serde_json::from_str(&stored.payload).map_err(|_| {
                 safe_error(
                     "storage.invalid_operation",
-                    "Os dados locais nÃƒÂ£o puderam ser reconstruÃƒÂ­dos.",
+                    "Os dados locais nÃƒÆ’Ã‚Â£o puderam ser reconstruÃƒÆ’Ã‚Âdos.",
                 )
             })?;
             runtime.replay(operation)?;
@@ -330,7 +330,7 @@ impl Runtime {
         let payload = serde_json::to_string(operation).map_err(|_| {
             safe_error(
                 "storage.serialization",
-                "A alteraÃƒÂ§ÃƒÂ£o nÃƒÂ£o pÃƒÂ´de ser preparada.",
+                "A alteraÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o nÃƒÆ’Ã‚Â£o pÃƒÆ’Ã‚Â´de ser preparada.",
             )
         })?;
         let kind = match operation {
@@ -398,7 +398,7 @@ fn apply(
                 let duration = TaskDuration::new(*minutes).ok_or_else(|| {
                     safe_error(
                         "validation.duration",
-                        "A duraÃƒÂ§ÃƒÂ£o deve ser maior que zero.",
+                        "A duraÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o deve ser maior que zero.",
                     )
                 })?;
                 actions
@@ -481,7 +481,7 @@ fn apply(
             if cycle.pending.as_ref().map(|pending| pending.id) != Some(draft_id) {
                 return Err(safe_error(
                     "planning.draft_changed",
-                    "A proposta jÃƒÂ¡ nÃƒÂ£o ÃƒÂ© a proposta atual.",
+                    "A proposta jÃƒÆ’Ã‚Â¡ nÃƒÆ’Ã‚Â£o ÃƒÆ’Ã‚Â© a proposta atual.",
                 ));
             }
             let selection =
@@ -521,7 +521,7 @@ fn apply(
                 let task = actions.task(*id).ok_or_else(|| {
                     safe_error(
                         "domain.task_missing",
-                        "Uma aÃƒÂ§ÃƒÂ£o da proposta nÃƒÂ£o existe mais.",
+                        "Uma aÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o da proposta nÃƒÆ’Ã‚Â£o existe mais.",
                     )
                 })?;
                 if matches!(task.state(), TaskState::Inbox | TaskState::Postponed) {
@@ -537,7 +537,7 @@ fn apply(
                     .ok_or_else(|| {
                         safe_error(
                             "execution.not_active",
-                            "NÃƒÂ£o existe plano ativo para reorganizar.",
+                            "NÃƒÆ’Ã‚Â£o existe plano ativo para reorganizar.",
                         )
                     })?
                     .revision();
@@ -559,7 +559,7 @@ fn apply(
             let task = actions.task(current).ok_or_else(|| {
                 safe_error(
                     "domain.task_missing",
-                    "A aÃƒÂ§ÃƒÂ£o atual nÃƒÂ£o existe mais.",
+                    "A aÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o atual nÃƒÆ’Ã‚Â£o existe mais.",
                 )
             })?;
             actions
@@ -575,7 +575,7 @@ fn apply(
             let task = actions.task(current).ok_or_else(|| {
                 safe_error(
                     "domain.task_missing",
-                    "A aÃƒÂ§ÃƒÂ£o atual nÃƒÂ£o existe mais.",
+                    "A aÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o atual nÃƒÆ’Ã‚Â£o existe mais.",
                 )
             })?;
             actions
@@ -591,7 +591,7 @@ fn apply(
             let task = actions.task(current).ok_or_else(|| {
                 safe_error(
                     "domain.task_missing",
-                    "A aÃƒÂ§ÃƒÂ£o atual nÃƒÂ£o existe mais.",
+                    "A aÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o atual nÃƒÆ’Ã‚Â£o existe mais.",
                 )
             })?;
             actions
@@ -610,7 +610,7 @@ fn current_task(cycle: &CycleState) -> Result<TaskId, IpcError> {
         .ok_or_else(|| {
             safe_error(
                 "execution.no_current",
-                "NÃƒÂ£o existe uma aÃƒÂ§ÃƒÂ£o no Agora.",
+                "NÃƒÆ’Ã‚Â£o existe uma aÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o no Agora.",
             )
         })
 }
@@ -712,10 +712,10 @@ fn format_date(value: LocalDate) -> String {
     )
 }
 fn invalid_date() -> IpcError {
-    safe_error("validation.date", "Data operacional invÃƒÂ¡lida.")
+    safe_error("validation.date", "Data operacional invÃƒÆ’Ã‚Â¡lida.")
 }
 fn invalid_identifier() -> IpcError {
-    safe_error("validation.identifier", "Identificador invÃƒÂ¡lido.")
+    safe_error("validation.identifier", "Identificador invÃƒÆ’Ã‚Â¡lido.")
 }
 fn project_id(value: u64) -> Result<ProjectId, IpcError> {
     ProjectId::new(value).ok_or_else(invalid_identifier)
@@ -738,7 +738,7 @@ fn parse_state(value: &str) -> Result<TaskState, IpcError> {
         "cancelled" => Ok(TaskState::Cancelled),
         _ => Err(safe_error(
             "validation.state",
-            "TransiÃƒÂ§ÃƒÂ£o de estado invÃƒÂ¡lida.",
+            "TransiÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o de estado invÃƒÆ’Ã‚Â¡lida.",
         )),
     }
 }
@@ -755,7 +755,7 @@ const fn state_name(value: TaskState) -> &'static str {
 fn domain_error(error: second_brain_application::ActionsError) -> IpcError {
     safe_error(
         "domain.rejected",
-        &format!("AlteraÃƒÂ§ÃƒÂ£o rejeitada: {error:?}"),
+        &format!("AlteraÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o rejeitada: {error:?}"),
     )
 }
 fn preference_error(error: second_brain_application::PreferenceError) -> IpcError {
@@ -779,13 +779,13 @@ fn planning_error(error: second_brain_application::PlanningError) -> IpcError {
 fn execution_error(error: second_brain_application::ExecutionError) -> IpcError {
     safe_error(
         "execution.rejected",
-        &format!("ExecuÃƒÂ§ÃƒÂ£o rejeitada: {error:?}"),
+        &format!("ExecuÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o rejeitada: {error:?}"),
     )
 }
 fn storage_error(error: crate::persistence::StoreError) -> IpcError {
     safe_error(
         "storage.unavailable",
-        &format!("Armazenamento local indisponÃƒÂ­vel: {error:?}"),
+        &format!("Armazenamento local indisponÃƒÆ’Ã‚Âvel: {error:?}"),
     )
 }
 fn safe_error(code: &str, message: &str) -> IpcError {
