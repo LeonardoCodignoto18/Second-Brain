@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+﻿import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FoundationShell } from "./FoundationShell";
@@ -6,27 +6,67 @@ import { FoundationShell } from "./FoundationShell";
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-const snapshot = {
+const task = {
+  id: 1,
+  revision: 0,
+  title: "Primeira ação",
+  state: "inbox",
+  projectId: 1,
+  estimatedMinutes: 30,
+};
+const base = {
   projects: [
     { id: 1, revision: 0, name: "Alpha", description: null, archived: false },
   ],
-  tasks: [
-    {
+  tasks: [task],
+  storage: { cipherVersion: "4.14.0 community", schemaVersion: 1 },
+  dailyCycle: { availability: null, draft: null, now: null },
+};
+
+const proposal = {
+  ...base,
+  dailyCycle: {
+    availability: {
+      day: "2026-08-07",
+      startMinute: 540,
+      endMinute: 1080,
+      revision: 1,
+    },
+    draft: {
       id: 1,
       revision: 0,
-      title: "Primeira ação",
-      state: "inbox",
-      projectId: 1,
-      estimatedMinutes: 30,
+      priorityTaskIds: [1],
+      eligibleTaskIds: [1],
+      missingDurationTaskIds: [],
+      contextComplete: true,
+      replanning: false,
     },
-  ],
-  storage: { cipherVersion: "4.14.0 community", schemaVersion: 1 },
+    now: null,
+  },
+};
+
+const active = {
+  ...proposal,
+  tasks: [{ ...task, revision: 1, state: "planned" }],
+  dailyCycle: {
+    ...proposal.dailyCycle,
+    draft: null,
+    now: {
+      day: "2026-08-07",
+      planId: 1,
+      revision: 0,
+      currentTaskId: 1,
+      remainingTaskIds: [1],
+      focusState: null,
+      replanReason: null,
+    },
+  },
 };
 
 describe("integrated desktop shell", () => {
   beforeEach(() => {
     invoke.mockReset();
-    invoke.mockResolvedValue(snapshot);
+    invoke.mockResolvedValue(base);
   });
 
   it("loads the encrypted local projection and captures a task through IPC", async () => {
@@ -53,6 +93,50 @@ describe("integrated desktop shell", () => {
           projectId: 1,
           estimatedMinutes: 45,
         },
+      }),
+    );
+  });
+
+  it("drives planning approval and Agora through the typed IPC boundary", async () => {
+    invoke
+      .mockResolvedValueOnce(base)
+      .mockResolvedValueOnce({
+        ...base,
+        dailyCycle: {
+          availability: {
+            day: "2026-08-07",
+            startMinute: 540,
+            endMinute: 1080,
+            revision: 1,
+          },
+          draft: null,
+          now: null,
+        },
+      })
+      .mockResolvedValueOnce(proposal)
+      .mockResolvedValueOnce(active)
+      .mockResolvedValueOnce({
+        ...active,
+        tasks: [{ ...task, revision: 2, state: "in_progress" }],
+        dailyCycle: {
+          ...active.dailyCycle,
+          now: { ...active.dailyCycle.now, revision: 1, focusState: "active" },
+        },
+      });
+
+    render(<FoundationShell />);
+    expect(await screen.findByText(/Quanto do seu dia/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Criar plano do dia" }));
+    expect(await screen.findByText("Primeira ação")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Aprovar 1" }));
+    expect(
+      await screen.findByRole("button", { name: "Iniciar foco" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Iniciar foco" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("start_focus", {
+        request: { expectedRevision: 0 },
       }),
     );
   });

@@ -21,10 +21,39 @@ export interface TaskDto {
   projectId: number | null;
   estimatedMinutes: number | null;
 }
+export interface DailyAvailabilityDto {
+  day: string;
+  startMinute: number;
+  endMinute: number;
+  revision: number;
+}
+export interface PlanDraftDto {
+  id: number;
+  revision: number;
+  priorityTaskIds: number[];
+  eligibleTaskIds: number[];
+  missingDurationTaskIds: number[];
+  contextComplete: boolean;
+  replanning: boolean;
+}
+export interface NowDto {
+  day: string;
+  planId: number;
+  revision: number;
+  currentTaskId: number | null;
+  remainingTaskIds: number[];
+  focusState: "active" | "paused" | null;
+  replanReason: "priority_postponed" | "plan_exhausted" | null;
+}
 export interface WorkspaceSnapshot {
   projects: ProjectDto[];
   tasks: TaskDto[];
   storage: { cipherVersion: string; schemaVersion: number };
+  dailyCycle: {
+    availability: DailyAvailabilityDto | null;
+    draft: PlanDraftDto | null;
+    now: NowDto | null;
+  };
 }
 export interface IpcError {
   code: string;
@@ -52,5 +81,36 @@ export const workspace = {
   transitionTask: (task: TaskDto, destination: TaskDto["state"]) =>
     invoke<WorkspaceSnapshot>("transition_task", {
       request: { id: task.id, expectedRevision: task.revision, destination },
+    }),
+  configureAvailability: (
+    day: string,
+    startMinute: number,
+    endMinute: number,
+    expectedRevision: number,
+  ) =>
+    invoke<WorkspaceSnapshot>("configure_daily_availability", {
+      request: { day, startMinute, endMinute, expectedRevision },
+    }),
+  proposePlan: (day: string) =>
+    invoke<WorkspaceSnapshot>("propose_daily_plan", { request: { day } }),
+  approvePlan: (draft: PlanDraftDto, selectedTaskIds: number[] | null) =>
+    invoke<WorkspaceSnapshot>("approve_daily_plan", {
+      request: {
+        draftId: draft.id,
+        expectedRevision: draft.revision,
+        selectedTaskIds,
+      },
+    }),
+  startFocus: (now: NowDto) =>
+    invoke<WorkspaceSnapshot>("start_focus", {
+      request: { expectedRevision: now.revision },
+    }),
+  completeCurrent: (now: NowDto) =>
+    invoke<WorkspaceSnapshot>("complete_current", {
+      request: { expectedRevision: now.revision },
+    }),
+  postponeCurrent: (now: NowDto) =>
+    invoke<WorkspaceSnapshot>("postpone_current", {
+      request: { expectedRevision: now.revision },
     }),
 };

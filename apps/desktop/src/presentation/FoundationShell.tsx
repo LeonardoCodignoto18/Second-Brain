@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   type IpcError,
+  type PlanDraftDto,
   type TaskDto,
   type WorkspaceSnapshot,
   workspace,
@@ -38,9 +39,7 @@ export function FoundationShell() {
       ) ?? [],
     [data],
   );
-  const now =
-    activeTasks.find((task) => task.state === "in_progress") ??
-    activeTasks.find((task) => task.state === "planned");
+  const today = localDay();
 
   return (
     <div className="app-shell">
@@ -56,7 +55,7 @@ export function FoundationShell() {
           <NavButton
             active={view === "today"}
             onClick={() => setView("today")}
-            icon="◎"
+            icon="◉"
           >
             Agora
           </NavButton>
@@ -89,7 +88,7 @@ export function FoundationShell() {
       <main aria-label="Second Brain OS">
         <header>
           <div>
-            <p className="eyebrow">QUINTA-FEIRA · 06 DE AGOSTO</p>
+            <p className="eyebrow">{humanDay(today).toUpperCase()}</p>
             <h1>
               {view === "today"
                 ? "O que importa agora"
@@ -111,7 +110,7 @@ export function FoundationShell() {
         {!data ? (
           <Loading />
         ) : view === "today" ? (
-          <Today data={data} now={now} busy={busy} run={run} />
+          <Today data={data} day={today} busy={busy} run={run} />
         ) : view === "inbox" ? (
           <Inbox data={data} busy={busy} run={run} />
         ) : (
@@ -124,49 +123,82 @@ export function FoundationShell() {
 
 function Today({
   data,
-  now,
+  day,
   busy,
   run,
 }: {
   data: WorkspaceSnapshot;
-  now: TaskDto | undefined;
+  day: string;
   busy: boolean;
   run: (operation: () => Promise<WorkspaceSnapshot>) => Promise<void>;
 }) {
-  const next = data.tasks.filter(
-    (task) => task.state === "planned" && task.id !== now?.id,
-  );
+  const { draft, now } = data.dailyCycle;
+  const current = data.tasks.find((task) => task.id === now?.currentTaskId);
+  const next =
+    now?.remainingTaskIds
+      .slice(1)
+      .map((id) => data.tasks.find((task) => task.id === id))
+      .filter((task): task is TaskDto => Boolean(task)) ?? [];
+
+  if (draft) {
+    return <PlanProposal data={data} draft={draft} busy={busy} run={run} />;
+  }
+
+  if (!now) {
+    return <PlanSetup data={data} day={day} busy={busy} run={run} />;
+  }
+
+  if (now.replanReason) {
+    return (
+      <section className="today-grid">
+        <article className="now-card replan-card">
+          <p className="section-label">REORGANIZAR</p>
+          <h2>O plano precisa de uma nova decisão</h2>
+          <p>
+            {now.replanReason === "priority_postponed"
+              ? "A prioridade foi adiada. Vamos escolher conscientemente o próximo passo."
+              : "As prioridades planejadas terminaram. Você decide se o dia continua."}
+          </p>
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => void run(() => workspace.proposePlan(now.day))}
+          >
+            Replanejar agora
+          </button>
+        </article>
+        <AfterPanel data={data} tasks={next} />
+      </section>
+    );
+  }
+
   return (
     <section className="today-grid">
       <article className="now-card">
         <p className="section-label">AGORA</p>
-        {now ? (
+        {current ? (
           <>
-            <h2>{now.title}</h2>
+            <h2>{current.title}</h2>
             <p>
-              {now.estimatedMinutes
-                ? `${now.estimatedMinutes} minutos reservados`
+              {current.estimatedMinutes
+                ? `${current.estimatedMinutes} minutos reservados`
                 : "Duração ainda não definida"}
             </p>
             <div className="actions">
-              {now.state === "planned" && (
+              {!now.focusState && (
                 <button
                   className="primary"
                   disabled={busy}
-                  onClick={() =>
-                    void run(() => workspace.transitionTask(now, "in_progress"))
-                  }
+                  onClick={() => void run(() => workspace.startFocus(now))}
                 >
                   Iniciar foco
                 </button>
               )}
-              {now.state === "in_progress" && (
+              {now.focusState === "active" && (
                 <button
                   className="primary"
                   disabled={busy}
-                  onClick={() =>
-                    void run(() => workspace.transitionTask(now, "completed"))
-                  }
+                  onClick={() => void run(() => workspace.completeCurrent(now))}
                 >
                   Concluir
                 </button>
@@ -174,9 +206,7 @@ function Today({
               <button
                 className="quiet"
                 disabled={busy}
-                onClick={() =>
-                  void run(() => workspace.transitionTask(now, "postponed"))
-                }
+                onClick={() => void run(() => workspace.postponeCurrent(now))}
               >
                 Adiar
               </button>
@@ -184,23 +214,193 @@ function Today({
           </>
         ) : (
           <Empty
-            title="Seu Agora está livre"
-            text="Planeje uma ação para transformar intenção em direção."
+            title="Plano concluído"
+            text="O sistema está preparando a próxima decisão do dia."
           />
         )}
       </article>
-      <article className="panel">
-        <div className="panel-title">
-          <h3>Depois</h3>
-          <span>{next.length}</span>
-        </div>
-        {next.length ? (
-          next.map((task) => <TaskRow key={task.id} task={task} data={data} />)
-        ) : (
-          <p className="muted">Nenhuma outra prioridade planejada.</p>
+      <AfterPanel data={data} tasks={next} />
+    </section>
+  );
+}
+
+function PlanSetup({
+  data,
+  day,
+  busy,
+  run,
+}: {
+  data: WorkspaceSnapshot;
+  day: string;
+  busy: boolean;
+  run: (operation: () => Promise<WorkspaceSnapshot>) => Promise<void>;
+}) {
+  const availability = data.dailyCycle.availability;
+  const [start, setStart] = useState(
+    availability ? minuteToTime(availability.startMinute) : "09:00",
+  );
+  const [end, setEnd] = useState(
+    availability ? minuteToTime(availability.endMinute) : "18:00",
+  );
+  const eligible = data.tasks.filter(
+    (task) =>
+      ["inbox", "planned", "postponed"].includes(task.state) &&
+      task.estimatedMinutes,
+  );
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    void run(async () => {
+      await workspace.configureAvailability(
+        day,
+        timeToMinute(start),
+        timeToMinute(end),
+        availability?.revision ?? 0,
+      );
+      return workspace.proposePlan(day);
+    });
+  }
+
+  return (
+    <section className="planning-stage">
+      <article className="now-card plan-setup">
+        <p className="section-label">ANTES DE COMEÇAR</p>
+        <h2>Quanto do seu dia está realmente disponível?</h2>
+        <p>
+          O plano usa somente ações com duração definida que cabem nessa janela.
+        </p>
+        <form className="availability-form" onSubmit={submit}>
+          <label>
+            Começo
+            <input
+              aria-label="Início da disponibilidade"
+              type="time"
+              required
+              value={start}
+              onChange={(event) => setStart(event.target.value)}
+            />
+          </label>
+          <label>
+            Fim
+            <input
+              aria-label="Fim da disponibilidade"
+              type="time"
+              required
+              value={end}
+              onChange={(event) => setEnd(event.target.value)}
+            />
+          </label>
+          <button className="primary" disabled={busy || !eligible.length}>
+            Criar plano do dia
+          </button>
+        </form>
+        {!eligible.length && (
+          <p className="planning-hint">
+            Capture ao menos uma ação com duração para criar um plano confiável.
+          </p>
         )}
       </article>
     </section>
+  );
+}
+
+function PlanProposal({
+  data,
+  draft,
+  busy,
+  run,
+}: {
+  data: WorkspaceSnapshot;
+  draft: PlanDraftDto;
+  busy: boolean;
+  run: (operation: () => Promise<WorkspaceSnapshot>) => Promise<void>;
+}) {
+  const [selected, setSelected] = useState(draft.priorityTaskIds);
+  const eligible = draft.eligibleTaskIds
+    .map((id) => data.tasks.find((task) => task.id === id))
+    .filter((task): task is TaskDto => Boolean(task));
+
+  function toggle(id: number) {
+    setSelected((current) =>
+      current.includes(id)
+        ? current.filter((value) => value !== id)
+        : current.length < 3
+          ? [...current, id]
+          : current,
+    );
+  }
+
+  return (
+    <section className="planning-stage">
+      <article className="now-card proposal-card">
+        <p className="section-label">
+          {draft.replanning ? "NOVO PLANO" : "PROPOSTA DO DIA"}
+        </p>
+        <h2>
+          {draft.replanning
+            ? "Como você quer continuar?"
+            : "Estas são as prioridades que cabem no seu dia"}
+        </h2>
+        <div className="proposal-list">
+          {eligible.map((task) => (
+            <label className="proposal-item" key={task.id}>
+              <input
+                type="checkbox"
+                checked={selected.includes(task.id)}
+                onChange={() => toggle(task.id)}
+              />
+              <TaskRow task={task} data={data} />
+            </label>
+          ))}
+        </div>
+        {draft.missingDurationTaskIds.length > 0 && (
+          <p className="planning-hint">
+            {draft.missingDurationTaskIds.length} ação(ões) ficaram fora por não
+            terem duração definida.
+          </p>
+        )}
+        <div className="actions">
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() =>
+              void run(() => workspace.approvePlan(draft, selected))
+            }
+          >
+            {selected.length ? `Aprovar ${selected.length}` : "Encerrar plano"}
+          </button>
+          <button
+            className="quiet"
+            disabled={busy}
+            onClick={() => void run(() => workspace.approvePlan(draft, null))}
+          >
+            Aceitar sugestão
+          </button>
+        </div>
+      </article>
+    </section>
+  );
+}
+
+function AfterPanel({
+  data,
+  tasks,
+}: {
+  data: WorkspaceSnapshot;
+  tasks: TaskDto[];
+}) {
+  return (
+    <article className="panel">
+      <div className="panel-title">
+        <h3>Depois</h3>
+        <span>{tasks.length}</span>
+      </div>
+      {tasks.length ? (
+        tasks.map((task) => <TaskRow key={task.id} task={task} data={data} />)
+      ) : (
+        <p className="muted">Nenhuma outra prioridade planejada.</p>
+      )}
+    </article>
   );
 }
 
@@ -275,42 +475,6 @@ function Inbox({
           tasks.map((task) => (
             <div className="task-line" key={task.id}>
               <TaskRow task={task} data={data} />
-              <div className="row-actions">
-                {["inbox", "postponed"].includes(task.state) && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void run(() => workspace.transitionTask(task, "planned"))
-                    }
-                  >
-                    Planejar
-                  </button>
-                )}
-                {task.state === "planned" && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void run(() =>
-                        workspace.transitionTask(task, "in_progress"),
-                      )
-                    }
-                  >
-                    Iniciar
-                  </button>
-                )}
-                {task.state === "in_progress" && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void run(() =>
-                        workspace.transitionTask(task, "completed"),
-                      )
-                    }
-                  >
-                    Concluir
-                  </button>
-                )}
-              </div>
             </div>
           ))
         ) : (
@@ -459,4 +623,26 @@ function readError(cause: unknown) {
   if (typeof cause === "object" && cause !== null && "message" in cause)
     return String((cause as IpcError).message);
   return "Não foi possível concluir a operação.";
+}
+function localDay() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function humanDay(day: string) {
+  const [year = 1970, month = 1, date = 1] = day.split("-").map(Number);
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  }).format(new Date(year, month - 1, date));
+}
+function timeToMinute(value: string) {
+  const [hour = 0, minute = 0] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+function minuteToTime(value: number) {
+  return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
 }

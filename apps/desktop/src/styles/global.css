@@ -446,3 +446,75 @@ h1 {
     animation-duration: 0.01ms !important;
   }
 }
+
+.planning-stage {
+  display: grid;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.plan-setup,
+.proposal-card,
+.replan-card {
+  min-height: 360px;
+}
+.availability-form {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  margin-top: 30px;
+}
+.availability-form label {
+  display: grid;
+  gap: 7px;
+  color: #777970;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.availability-form input {
+  min-width: 130px;
+  padding: 11px 12px;
+  border: 1px solid #deded7;
+  border-radius: 9px;
+  color: #30322d;
+  background: #fff;
+  font: inherit;
+}
+.planning-hint {
+  margin-top: 18px;
+  color: #8b7967;
+  font-size: 11px;
+}
+.proposal-list {
+  display: grid;
+  gap: 8px;
+  margin: 24px 0;
+}
+.proposal-item {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e4e4dd;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+.proposal-item:has(input:checked) {
+  border-color: #9da996;
+  background: #f7f9f5;
+}
+.proposal-item input {
+  accent-color: #6f7768;
+}
+.replan-card .primary {
+  margin-top: 24px;
+}
+@media (max-width: 720px) {
+  .availability-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
