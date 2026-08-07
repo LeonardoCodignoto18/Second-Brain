@@ -117,7 +117,6 @@ impl PlanDraft {
         &self.missing_duration
     }
     /// Returns every task eligible for explicit substitution.
-    #[must_use]
     pub fn eligible_tasks(&self) -> impl Iterator<Item = TaskId> + '_ {
         self.eligible.iter().copied()
     }
