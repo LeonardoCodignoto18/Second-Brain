@@ -127,7 +127,7 @@ struct ActiveExecution {
     revision: u64,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 /// Owner of the active-plan execution state.
 pub struct Execution {
     active: Option<ActiveExecution>,

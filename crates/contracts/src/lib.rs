@@ -81,8 +81,117 @@ pub struct WorkspaceSnapshot {
     pub tasks: Vec<TaskDto>,
     /// Verified persistence health.
     pub storage: StorageHealthDto,
+    /// Current daily planning and execution projection.
+    pub daily_cycle: DailyCycleDto,
 }
 
+/// Current configured availability for the operational day.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct DailyAvailabilityDto {
+    /// ISO local operational date.
+    pub day: String,
+    /// Inclusive start minute from local midnight.
+    pub start_minute: u16,
+    /// Exclusive end minute from local midnight.
+    pub end_minute: u16,
+    /// Optimistic concurrency revision.
+    pub revision: u64,
+}
+
+/// Pending plan proposal awaiting an explicit user decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct PlanDraftDto {
+    /// Stable local draft identifier.
+    pub id: u64,
+    /// Optimistic concurrency revision.
+    pub revision: u64,
+    /// Deterministically recommended tasks in order.
+    pub priority_task_ids: Vec<u64>,
+    /// Tasks permitted as explicit substitutions.
+    pub eligible_task_ids: Vec<u64>,
+    /// Tasks requiring duration before reliable planning.
+    pub missing_duration_task_ids: Vec<u64>,
+    /// Whether required planning context is complete.
+    pub context_complete: bool,
+    /// Whether this draft replaces the active plan.
+    pub replanning: bool,
+}
+
+/// Post-approval Agora projection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct NowDto {
+    /// ISO local operational date.
+    pub day: String,
+    /// Active approved plan identifier.
+    pub plan_id: u64,
+    /// Optimistic concurrency revision.
+    pub revision: u64,
+    /// Task currently presented by Agora.
+    pub current_task_id: Option<u64>,
+    /// Remaining approved task identifiers in order.
+    pub remaining_task_ids: Vec<u64>,
+    /// Current focus state, when a session exists.
+    pub focus_state: Option<String>,
+    /// Deterministic reason for pending replanning.
+    pub replan_reason: Option<String>,
+}
+
+/// Complete daily-cycle projection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct DailyCycleDto {
+    /// Explicit availability configuration, when present.
+    pub availability: Option<DailyAvailabilityDto>,
+    /// Proposal awaiting a user decision, when present.
+    pub draft: Option<PlanDraftDto>,
+    /// Post-approval Agora state, when present.
+    pub now: Option<NowDto>,
+}
+
+/// Configures the conscious availability window for one day.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ConfigureDailyAvailabilityRequest {
+    /// ISO local operational date.
+    pub day: String,
+    /// Inclusive start minute from local midnight.
+    pub start_minute: u16,
+    /// Exclusive end minute from local midnight.
+    pub end_minute: u16,
+    /// Expected schedule revision.
+    pub expected_revision: u64,
+}
+
+/// Requests a deterministic proposal for the configured day.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ProposeDailyPlanRequest {
+    /// ISO local operational date.
+    pub day: String,
+}
+
+/// Approves all or a selected subset of a pending proposal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ApproveDailyPlanRequest {
+    /// Stable draft identifier.
+    pub draft_id: u64,
+    /// Expected draft revision.
+    pub expected_revision: u64,
+    /// Explicit subset, or `None` to accept all recommendations.
+    pub selected_task_ids: Option<Vec<u64>>,
+}
+
+/// Revision-safe command for the current Agora item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct ExecuteNowRequest {
+    /// Expected Agora revision.
+    pub expected_revision: u64,
+}
 /// Input for creating a project.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

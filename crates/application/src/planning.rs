@@ -8,6 +8,11 @@ use crate::{DeterministicProposal, LocalDate, ProposedPriority, TaskId};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct DraftId(u64);
 impl DraftId {
+    /// Returns the stable local value.
+    #[must_use]
+    pub const fn value(self) -> u64 {
+        self.0
+    }
     /// Creates a non-zero identifier.
     #[must_use]
     pub const fn new(value: u64) -> Option<Self> {
@@ -18,6 +23,11 @@ impl DraftId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PlanId(u64);
 impl PlanId {
+    /// Returns the stable local value.
+    #[must_use]
+    pub const fn value(self) -> u64 {
+        self.0
+    }
     /// Creates a non-zero identifier.
     #[must_use]
     pub const fn new(value: u64) -> Option<Self> {
@@ -106,6 +116,11 @@ impl PlanDraft {
     pub fn missing_duration(&self) -> &[TaskId] {
         &self.missing_duration
     }
+    /// Returns every task eligible for explicit substitution.
+    #[must_use]
+    pub fn eligible_tasks(&self) -> impl Iterator<Item = TaskId> + '_ {
+        self.eligible.iter().copied()
+    }
     /// Returns whether the source context was complete.
     #[must_use]
     pub const fn context_complete(&self) -> bool {
@@ -156,7 +171,7 @@ impl DailyPlan {
 }
 
 /// Owner of draft and approved daily plan state.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct DailyPlanning {
     drafts: BTreeMap<DraftId, PlanDraft>,
     active: BTreeMap<LocalDate, DailyPlan>,

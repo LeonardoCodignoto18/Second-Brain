@@ -370,7 +370,7 @@ impl DailyAvailability {
 }
 
 /// Owner of fixed commitments and availability rules.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Schedule {
     commitments: BTreeMap<CommitmentId, Commitment>,
     weekly_availability: BTreeMap<Weekday, TimeWindow>,

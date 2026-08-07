@@ -9,8 +9,9 @@ use std::sync::{Arc, Mutex};
 
 use second_brain_application::Application;
 use second_brain_contracts::{
-    ArchiveProjectRequest, CreateProjectRequest, CreateTaskRequest, FoundationStatus, IpcError,
-    TransitionTaskRequest, WorkspaceSnapshot,
+    ApproveDailyPlanRequest, ArchiveProjectRequest, ConfigureDailyAvailabilityRequest,
+    CreateProjectRequest, CreateTaskRequest, ExecuteNowRequest, FoundationStatus, IpcError,
+    ProposeDailyPlanRequest, TransitionTaskRequest, WorkspaceSnapshot,
 };
 use tauri::{Manager, State};
 
@@ -74,6 +75,71 @@ fn transition_task(
         .transition_task(request)
 }
 
+#[tauri::command]
+fn configure_daily_availability(
+    request: ConfigureDailyAvailabilityRequest,
+    runtime: State<'_, Mutex<Runtime>>,
+) -> Result<WorkspaceSnapshot, IpcError> {
+    runtime
+        .lock()
+        .map_err(|_| unavailable())?
+        .configure_daily_availability(request)
+}
+
+#[tauri::command]
+fn propose_daily_plan(
+    request: ProposeDailyPlanRequest,
+    runtime: State<'_, Mutex<Runtime>>,
+) -> Result<WorkspaceSnapshot, IpcError> {
+    runtime
+        .lock()
+        .map_err(|_| unavailable())?
+        .propose_daily_plan(request)
+}
+
+#[tauri::command]
+fn approve_daily_plan(
+    request: ApproveDailyPlanRequest,
+    runtime: State<'_, Mutex<Runtime>>,
+) -> Result<WorkspaceSnapshot, IpcError> {
+    runtime
+        .lock()
+        .map_err(|_| unavailable())?
+        .approve_daily_plan(request)
+}
+
+#[tauri::command]
+fn start_focus(
+    request: ExecuteNowRequest,
+    runtime: State<'_, Mutex<Runtime>>,
+) -> Result<WorkspaceSnapshot, IpcError> {
+    runtime
+        .lock()
+        .map_err(|_| unavailable())?
+        .start_focus(request)
+}
+
+#[tauri::command]
+fn complete_current(
+    request: ExecuteNowRequest,
+    runtime: State<'_, Mutex<Runtime>>,
+) -> Result<WorkspaceSnapshot, IpcError> {
+    runtime
+        .lock()
+        .map_err(|_| unavailable())?
+        .complete_current(request)
+}
+
+#[tauri::command]
+fn postpone_current(
+    request: ExecuteNowRequest,
+    runtime: State<'_, Mutex<Runtime>>,
+) -> Result<WorkspaceSnapshot, IpcError> {
+    runtime
+        .lock()
+        .map_err(|_| unavailable())?
+        .postpone_current(request)
+}
 fn unavailable() -> IpcError {
     IpcError {
         code: "runtime.unavailable".to_owned(),
@@ -108,7 +174,13 @@ pub fn run() {
             create_project,
             archive_project,
             create_task,
-            transition_task
+            transition_task,
+            configure_daily_availability,
+            propose_daily_plan,
+            approve_daily_plan,
+            start_focus,
+            complete_current,
+            postpone_current
         ])
         .run(tauri::generate_context!())
         .expect("the Second Brain OS desktop host must start");
