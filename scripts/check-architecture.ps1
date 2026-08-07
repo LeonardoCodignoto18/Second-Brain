@@ -12,7 +12,8 @@ foreach ($package in $metadata.packages) {
 $allowed = @{
     "second-brain-contracts" = @()
     "second-brain-application" = @("second-brain-contracts")
-    "second-brain-desktop" = @("second-brain-application", "second-brain-contracts")
+    "second-brain-desktop" = @("second-brain-application", "second-brain-contracts", "second-brain-windows-security")
+    "second-brain-windows-security" = @()
 }
 
 foreach ($packageName in $allowed.Keys) {

@@ -4,6 +4,7 @@ members = [
   "apps/desktop/src-tauri",
   "crates/application",
   "crates/contracts",
+  "crates/windows-security",
 ]
 
 [workspace.package]
@@ -18,6 +19,9 @@ repository = "https://example.invalid/second-brain-os"
 serde = { version = "1.0.228", features = ["derive"] }
 tauri = { version = "=2.11.5", default-features = false, features = ["wry"] }
 tauri-build = { version = "=2.6.3", features = [] }
+rusqlite = { version = "=0.40.1", features = ["bundled-sqlcipher-vendored-openssl"] }
+serde_json = "=1.0.149"
+getrandom = "=0.3.4"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

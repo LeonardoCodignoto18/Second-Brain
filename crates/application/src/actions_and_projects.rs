@@ -167,7 +167,7 @@ impl Task {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 /// In-memory owner of deterministic task and minimal-project operations.
 pub struct ActionsAndProjects {
     projects: BTreeMap<ProjectId, Project>,
@@ -420,8 +420,20 @@ impl ActionsAndProjects {
     pub fn task(&self, id: TaskId) -> Option<Task> {
         self.tasks.get(&id).cloned()
     }
+    /// Returns every project snapshot, including archived projects.
     #[must_use]
+    pub fn projects(&self) -> Vec<Project> {
+        self.projects.values().cloned().collect()
+    }
+
+    /// Returns every task snapshot.
+    #[must_use]
+    pub fn tasks(&self) -> Vec<Task> {
+        self.tasks.values().cloned().collect()
+    }
+
     /// Returns active projects in stable identifier order.
+    #[must_use]
     pub fn active_projects(&self) -> Vec<Project> {
         self.projects
             .values()
